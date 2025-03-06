@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const dotenv = require('dotenv');
 const crypto = require('crypto');
 const { X509Certificate } = require('crypto');
 const TencentCloudCommon = require("tencentcloud-sdk-nodejs-common");
@@ -38,7 +39,7 @@ class CertUpdater {
     const domains = await this.getAllDomains(certInfo.domain);
 
     // 5. 更新域名证书
-    //await this.updateDomainCerts(domains, certificate);
+    await this.updateDomainCerts(domains, certificate);
 
     // 6. 删除旧证书
     await this.deleteOldCertificates(certInfo, certificate);
@@ -121,7 +122,7 @@ class CertUpdater {
       domain = subjectAltName[0];
     }
 
-    console.log(`证书解析成功：SAN: ${subjectAltName}, FP: ${fingerprint}`);
+    console.log(`证书解析成功：{SAN: ${subjectAltName}, FP: ${fingerprint}}`);
     return { fingerprint, domain, subjectAltName };
   }
 
@@ -172,7 +173,7 @@ class CertUpdater {
     if (this.sslCerts && Array.isArray(this.sslCerts.Certificates)) {
       const matchingCert = this.sslCerts.Certificates.find(item => item.Alias === certInfo.fingerprint);
       if (matchingCert) {
-        console.log(`找到匹配证书，ID: ${matchingCert.CertificateId}`);
+        console.log(`找到匹配证书 - ID: ${matchingCert.CertificateId}`);
         certificateId = matchingCert.CertificateId;
       }
     }
@@ -302,14 +303,18 @@ class CertUpdater {
         && item.Domain === certInfo.domain
       );
 
-      // 原则上应该先查询下是否有关联的云资源，不过如果存在的话会删除失败，就不查了
-      // → FailedOperation.DeleteResourceFailed	证书已关联云资源，无法删除。
-      for (const cert of certDeleteQueue) {
-        try {
-          await this.sslClient.request("DeleteCertificate", { CertificateId: cert.CertificateId });
-          console.log(`删除证书: ${cert.CertificateId}，域名: ${cert.Domain}`);
-        } catch (err) {
-          console.error(`删除证书 ${cert.CertificateId} 失败:\n ${err}`);
+      if (certDeleteQueue.length === 0) {
+        console.log(`当前证书有效至 ${certificate.CertEndTime}，未发现需要删除的旧证书。`);
+      } else {
+        // 原则上应该先查询下是否有关联的云资源，不过如果存在的话会删除失败，就不查了
+        // → FailedOperation.DeleteResourceFailed	证书已关联云资源，无法删除。
+        for (const cert of certDeleteQueue) {
+          try {
+            await this.sslClient.request("DeleteCertificate", { CertificateId: cert.CertificateId });
+            console.log(`删除证书: ${cert.CertificateId}，域名: ${cert.Domain}`);
+          } catch (err) {
+            console.error(`删除证书 ${cert.CertificateId} 失败:\n ${err}`);
+          }
         }
       }
     }
@@ -317,18 +322,27 @@ class CertUpdater {
 }
 
 /**
- * 验证环境变量。
+ * 验证环境变量：先尝试环境变量，若失败则从 .env 文件读取
  * 
  * @returns {Object} - 包含 secretId 和 secretKey 的配置对象
  */
 function validateEnv() {
   const requiredEnvVars = ['TENCENT_SECRET_ID', 'TENCENT_SECRET_KEY'];
-  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-  if (missingVars.length) throw new Error(`缺少环境变量: ${missingVars.join(', ')}`);
-  return {
+  const envPath = path.join(__dirname, '.env');
+  if (fs.existsSync(envPath)) {
+    const result = dotenv.config({ path: envPath });
+  }
+
+  const envConfig = {
     secretId: process.env.TENCENT_SECRET_ID,
-    secretKey: process.env.TENCENT_SECRET_KEY,
+    secretKey: process.env.TENCENT_SECRET_KEY
   };
+  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+  if (missingVars.length > 0) {
+    throw new Error(`缺少必要配置: ${missingVars.join(', ')}，请检查环境变量或 ${envPath}`);
+  }
+
+  return envConfig;
 }
 
 /**
@@ -338,8 +352,8 @@ async function main() {
   // 校验环境变量
   const config = validateEnv();
 
-  // 证书所在路径：当前目录或指定路径下
-  const certPath = process.argv[2] ? path.resolve(process.cwd(), process.argv[2]) : __dirname;
+  // 证书所在路径：工作目录或指定路径下
+  const certPath = process.argv[2] ? path.resolve(process.cwd(), process.argv[2]) : process.cwd();
 
   // 腾讯云证书的更新、上传和删除
   const updater = new CertUpdater(config);
