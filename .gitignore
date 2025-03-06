@@ -1,0 +1,46 @@
+# 忽略 Node.js 依赖包目录
+node_modules/
+
+# 忽略日志文件
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 忽略构建产物
+dist/
+build/
+
+# 忽略环境变量文件
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# 忽略临时文件
+*.tmp
+*.temp
+*.swp
+
+# 忽略操作系统生成的文件
+.DS_Store          # macOS Finder 生成的元数据文件
+Thumbs.db          # Windows 缩略图缓存
+
+# 忽略编辑器或 IDE 生成的文件
+.vscode/          # VS Code 配置文件
+.idea/            # IntelliJ IDEA 配置文件
+*.sublime-*       # Sublime Text 项目文件
+
+# 忽略测试覆盖率报告
+coverage/
+
+# 忽略证书文件
+*.pem             # 证书和密钥文件
+*.key
+*.crt
+cert/
+
+# 忽略包管理器的锁文件（可选，根据偏好选择）
+# package-lock.json  # npm 的锁文件
+# yarn.lock         # Yarn 的锁文件

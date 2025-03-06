@@ -1,0 +1,25 @@
+{
+  "name": "tencentcloud-cdn-cert-manager",
+  "version": "1.0.0",
+  "description": "用于上传本地证书到腾讯云托管、更新 CDN 域名配置并删除陈旧证书的工具。",
+  "main": "main.js",
+  "scripts": {
+    "start": "node --no-deprecation ./main.js ./cert"
+  },
+  "keywords": [
+    "tencentcloud",
+    "cdn",
+    "ssl-certificate",
+    "certificate-upload",
+    "certificate-management",
+    "old-certificate-deletion",
+    "nodejs"
+  ],
+  "author": "inkss",
+  "license": "MIT",
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "tencentcloud-sdk-nodejs-common": "^4.0.1044"
+  }
+}
