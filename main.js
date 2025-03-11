@@ -32,8 +32,6 @@ class CertUpdater {
     // 2. 解析证书信息
     const certInfo = this.parseCertificateInfo(cert);
 
-    return;
-
     // 3. 查找或上传证书，返回证书信息 基于 DescribeCertificate 接口
     const certificate = await this.getOrUploadCertificate(certInfo, cert, key);
 
