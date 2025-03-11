@@ -32,6 +32,8 @@ class CertUpdater {
     // 2. 解析证书信息
     const certInfo = this.parseCertificateInfo(cert);
 
+    return;
+
     // 3. 查找或上传证书，返回证书信息 基于 DescribeCertificate 接口
     const certificate = await this.getOrUploadCertificate(certInfo, cert, key);
 
@@ -73,29 +75,38 @@ class CertUpdater {
    * @param {string} certPath - 证书文件所在路径
    * @returns {Object} 包含证书信息的对象
    * @returns {string} returns.fingerprint - 证书的 SHA1 指纹（大写十六进制）
+   * @returns {string} returns.expires - 证书的过期日期（UTC 格式，示例：'Dec 24 23:59:59 2023 GMT'）
    * @returns {string} returns.domain - 证书的主域名（优先取 CN，若无则取第一个 SAN 域名）
    * @returns {string[]} returns.subjectAltName - 证书中的所有域名列表（包括 SAN 和 CN）
    */
   parseCertificateInfo(pemContent) {
-    // 1. 输入验证
+    //输入验证
     if (!pemContent || typeof pemContent !== 'string') {
       throw new Error('证书内容必须为非空字符串');
     }
 
-    // 2. 拆分 PEM 文件，取第一张证书（叶子证书）
+    //拆分 PEM 文件，取第一张证书（叶子证书）
     const certs = pemContent.split(/(?=-----BEGIN CERTIFICATE-----)/).filter(Boolean);
     if (certs.length === 0) {
       throw new Error('证书内容中未找到有效证书');
     }
     const leafCertPem = certs[0];
 
-    // 3. 创建 X509Certificate 对象解析证书
+    //创建 X509Certificate 对象解析证书
     const cert = new X509Certificate(leafCertPem);
 
-    // 4. 计算证书 SHA1 指纹（基于证书原始二进制数据）
+    // 提取证书过期时间并判断是否过期
+    const expires = cert.validTo;
+    const diffMs = new Date(expires).getTime() - Date.now();
+    const days = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60 * 24));
+    if (diffMs <= 0) {
+      throw Error(`证书已过期 ${days} 天！\n服务中止，请重新选择证书文件。`);
+    }
+
+    //计算证书 SHA1 指纹（基于证书原始二进制数据）
     const fingerprint = crypto.createHash('sha1').update(cert.raw).digest('hex').toUpperCase();
 
-    // 5. 提取证书的域名列表
+    //提取证书的域名列表
     let subjectAltName = cert.subjectAltName
       ? cert.subjectAltName
         .split(/,\s*/)
@@ -104,7 +115,7 @@ class CertUpdater {
         .map(item => item.replace(/^DNS:/, ''))
       : [];
 
-    // 6. 提取证书主体中的 CN（可能的主域名）
+    //提取证书主体中的 CN（可能的主域名）
     let domain = null;
     const cnMatch = cert.subject.match(/CN=([^,]+)/);
     if (cnMatch) {
@@ -112,18 +123,18 @@ class CertUpdater {
       if (!subjectAltName.includes(domain)) subjectAltName.push(domain);
     }
 
-    // 7. 如果 subjectAltName 为空，抛出异常
+    //如果 subjectAltName 为空，抛出异常
     if (subjectAltName.length === 0) {
       throw new Error('无法从证书中提取域名信息');
     }
 
-    // 8. 如果没有 CN，则使用第一个 SAN 域名作为主域名
+    //如果没有 CN，则使用第一个 SAN 域名作为主域名
     if (!domain && subjectAltName.length > 0) {
       domain = subjectAltName[0];
     }
 
-    console.log(`证书解析成功：{SAN: ${subjectAltName}, FP: ${fingerprint}}`);
-    return { fingerprint, domain, subjectAltName };
+    console.log(`证书解析成功：{\n 主题：${domain}\n 可选名称：${subjectAltName}\n 指纹: ${fingerprint}\n 过期时间: ${expires}\n 剩余日期：${days}\n}`);
+    return { fingerprint, expires, domain, subjectAltName };
   }
 
   /**
@@ -311,7 +322,7 @@ class CertUpdater {
         for (const cert of certDeleteQueue) {
           try {
             await this.sslClient.request("DeleteCertificate", { CertificateId: cert.CertificateId });
-            console.log(`删除证书: ${cert.CertificateId}，域名: ${cert.Domain}`);
+            console.log(`删除证书: ${cert.CertificateId}，主题: ${cert.Domain}`);
           } catch (err) {
             console.error(`删除证书 ${cert.CertificateId} 失败:\n ${err}`);
           }
@@ -362,6 +373,6 @@ async function main() {
 
 // 异步调用主函数并处理潜在的异常
 main().catch((err) => {
-  console.error(`脚本执行失败:\n ${err}`);
+  console.error(`脚本执行失败:\n${err}`);
   process.exit(1);
 });
