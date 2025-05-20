@@ -58,8 +58,8 @@ class CertUpdater {
 
     let cert, key;
     try {
-      cert = fs.readFileSync(`${certPath}/fullchain.pem`, "utf-8");
-      key = fs.readFileSync(`${certPath}/privkey.pem`, "utf-8");
+      cert = fs.readFileSync(`${certPath}/fullchain.cer`, "utf-8");
+      key = fs.readFileSync(`${certPath}/privkey.key`, "utf-8");
     } catch (err) {
       throw new Error(`读取证书文件失败 (路径: ${certPath}):\n ${err}`);
     }
@@ -341,10 +341,11 @@ function validateEnv() {
   if (fs.existsSync(envPath)) {
     const result = dotenv.config({ path: envPath });
   }
-
+  // CERT_PATH 需要填写绝对路径
   const envConfig = {
     secretId: process.env.TENCENT_SECRET_ID,
-    secretKey: process.env.TENCENT_SECRET_KEY
+    secretKey: process.env.TENCENT_SECRET_KEY,
+    certpath: process.env.CERT_PATH
   };
   const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
   if (missingVars.length > 0) {
@@ -361,8 +362,8 @@ async function main() {
   // 校验环境变量
   const config = validateEnv();
 
-  // 证书所在路径：工作目录或指定路径下
-  const certPath = process.argv[2] ? path.resolve(process.cwd(), process.argv[2]) : process.cwd();
+  // 证书所在路径：指定路径下或者.env读取
+  const certPath = process.argv[2] ? path.resolve(process.cwd(), process.argv[2]) : config.certpath;
 
   // 腾讯云证书的更新、上传和删除
   const updater = new CertUpdater(config);
